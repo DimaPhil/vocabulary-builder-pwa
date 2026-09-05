@@ -31,39 +31,21 @@ jobs:
       - name: Unit and component tests with coverage
         run: npm run test:coverage
 
+      - name: Build installable PWA
+        run: npm run build:web
+
+      - name: Verify PWA output
+        run: |
+          test -f dist/index.html
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/data/seed/all.json
+          grep -q '/manifest.webmanifest' dist/index.html
+          grep -q 'data/seed/all.json' dist/sw.js
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
           path: coverage
-
-  ios-build:
-    name: ios-build
-    runs-on: macos-15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Prebuild iOS project
-        run: npx expo prebuild --platform ios --non-interactive --clean
-
-      - name: Build iOS simulator app
-        run: |
-          cd ios
-          xcodebuild \
-            -workspace VocabularyBuilder.xcworkspace \
-            -scheme VocabularyBuilder \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            build

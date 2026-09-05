@@ -1,41 +1,61 @@
 import { deleteCategory } from "@/lib/db/repositories";
+import { getAppState, restoreAppState } from "@/lib/storage/indexedDb";
+
+function backup() {
+  const now = "2026-01-01T00:00:00.000Z";
+  return JSON.stringify({
+    format: "vocabulary-builder-backup",
+    exportedAt: now,
+    state: {
+      version: 1,
+      nextCategoryId: 10,
+      nextItemId: 2,
+      categories: [
+        { id: 7, slug: "old", name: "Old", createdAt: now, updatedAt: now },
+        { id: 9, slug: "new", name: "New", createdAt: now, updatedAt: now },
+      ],
+      items: [
+        {
+          id: 1,
+          categoryId: 7,
+          sourceText: "word",
+          targetText: "слово",
+          sourceLanguage: "en",
+          targetLanguage: "ru",
+          examples: [],
+          synonyms: [],
+          imageKind: "none",
+          imageUri: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      settings: {
+        defaultSourceLanguage: "en",
+        defaultTargetLanguage: "ru",
+        rotationHours: 1,
+        rotationSeed: "seed",
+      },
+    },
+  });
+}
 
 describe("deleteCategory", () => {
-  it("deletes category items before deleting the category when requested", async () => {
-    const runAsync = jest.fn().mockResolvedValue(undefined);
-    const db = { runAsync } as never;
+  it("deletes category items when requested", async () => {
+    await restoreAppState(backup());
+    await deleteCategory(7, { deleteItems: true });
 
-    await deleteCategory(db, 7, { deleteItems: true });
-
-    expect(runAsync).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining("DELETE FROM vocabulary_items"),
-      7
-    );
-    expect(runAsync).toHaveBeenNthCalledWith(
-      2,
-      "DELETE FROM categories WHERE id = ?",
-      7
-    );
+    const state = await getAppState();
+    expect(state.categories.map(({ id }) => id)).toEqual([9]);
+    expect(state.items).toEqual([]);
   });
 
-  it("reassigns items before deleting the category when a fallback category is provided", async () => {
-    const runAsync = jest.fn().mockResolvedValue(undefined);
-    const db = { runAsync } as never;
+  it("reassigns items before deleting their category", async () => {
+    await restoreAppState(backup());
+    await deleteCategory(7, { reassignToCategoryId: 9 });
 
-    await deleteCategory(db, 7, { reassignToCategoryId: 9 });
-
-    expect(runAsync).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining("UPDATE vocabulary_items"),
-      9,
-      expect.any(String),
-      7
-    );
-    expect(runAsync).toHaveBeenNthCalledWith(
-      2,
-      "DELETE FROM categories WHERE id = ?",
-      7
-    );
+    const state = await getAppState();
+    expect(state.categories.map(({ id }) => id)).toEqual([9]);
+    expect(state.items[0].categoryId).toBe(9);
   });
 });

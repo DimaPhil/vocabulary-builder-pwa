@@ -1,276 +1,247 @@
-import type { SQLiteDatabase } from "expo-sqlite";
-
 import type {
   AppSettingsInput,
   CategoryInput,
+  ImportPayload,
   VocabularyItemInput,
 } from "@/lib/db/schemas";
-import { mapCategoryRow, mapVocabularyRow } from "@/lib/db/serializers";
+import { getAppState, updateAppState } from "@/lib/storage/indexedDb";
 import type { AppSettings, Category, DashboardStats, VocabularyItem } from "@/lib/types";
 import { isoNow } from "@/lib/utils/date";
 
-export async function getCategories(db: SQLiteDatabase): Promise<Category[]> {
-  const rows = await db.getAllAsync<{
-    id: number;
-    slug: string;
-    name: string;
-    created_at: string;
-    updated_at: string;
-  }>("SELECT * FROM categories ORDER BY name ASC");
+function withCategory(
+  item: Omit<VocabularyItem, "categoryName" | "categorySlug">,
+  categories: Map<number, Category>
+) {
+  const category = categories.get(item.categoryId);
 
-  return rows.map(mapCategoryRow);
+  return {
+    ...item,
+    categoryName: category?.name,
+    categorySlug: category?.slug,
+  };
 }
 
-export async function createCategory(
-  db: SQLiteDatabase,
-  input: CategoryInput
-) {
-  const now = isoNow();
-  await db.runAsync(
-    `
-      INSERT INTO categories (slug, name, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
-    `,
-    input.slug,
-    input.name,
-    now,
-    now
-  );
+export async function getCategories(): Promise<Category[]> {
+  const { categories } = await getAppState();
+  return [...categories].sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export async function updateCategory(
-  db: SQLiteDatabase,
-  categoryId: number,
-  input: CategoryInput
-) {
-  await db.runAsync(
-    `
-      UPDATE categories
-      SET slug = ?, name = ?, updated_at = ?
-      WHERE id = ?
-    `,
-    input.slug,
-    input.name,
-    isoNow(),
-    categoryId
-  );
+export async function createCategory(input: CategoryInput) {
+  return updateAppState((state) => {
+    if (state.categories.some((category) => category.slug === input.slug)) {
+      throw new Error(`Category slug "${input.slug}" already exists.`);
+    }
+
+    const now = isoNow();
+    state.categories.push({
+      id: state.nextCategoryId++,
+      slug: input.slug,
+      name: input.name,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
 }
 
-export async function getCategoryUsage(
-  db: SQLiteDatabase,
-  categoryId: number
-) {
-  const row = await db.getFirstAsync<{ total: number }>(
-    `
-      SELECT COUNT(*) AS total
-      FROM vocabulary_items
-      WHERE category_id = ?
-    `,
-    categoryId
-  );
+export async function updateCategory(categoryId: number, input: CategoryInput) {
+  return updateAppState((state) => {
+    const category = state.categories.find((candidate) => candidate.id === categoryId);
 
-  return row?.total ?? 0;
+    if (!category) {
+      throw new Error("Category does not exist.");
+    }
+    if (
+      state.categories.some(
+        (candidate) => candidate.id !== categoryId && candidate.slug === input.slug
+      )
+    ) {
+      throw new Error(`Category slug "${input.slug}" already exists.`);
+    }
+
+    category.slug = input.slug;
+    category.name = input.name;
+    category.updatedAt = isoNow();
+  });
+}
+
+export async function getCategoryUsage(categoryId: number) {
+  const { items } = await getAppState();
+  return items.filter((item) => item.categoryId === categoryId).length;
 }
 
 export async function deleteCategory(
-  db: SQLiteDatabase,
   categoryId: number,
   options?: {
     reassignToCategoryId?: number;
     deleteItems?: boolean;
   }
 ) {
-  if (options?.deleteItems) {
-    await db.runAsync(
-      `
-        DELETE FROM vocabulary_items
-        WHERE category_id = ?
-      `,
-      categoryId
-    );
-  } else if (options?.reassignToCategoryId) {
-    await db.runAsync(
-      `
-        UPDATE vocabulary_items
-        SET category_id = ?, updated_at = ?
-        WHERE category_id = ?
-      `,
-      options.reassignToCategoryId,
-      isoNow(),
-      categoryId
-    );
-  }
+  return updateAppState((state) => {
+    if (!state.categories.some((category) => category.id === categoryId)) {
+      return;
+    }
 
-  await db.runAsync("DELETE FROM categories WHERE id = ?", categoryId);
+    const used = state.items.some((item) => item.categoryId === categoryId);
+
+    if (used && !options?.deleteItems && !options?.reassignToCategoryId) {
+      throw new Error("Choose whether to delete or reassign this category's items.");
+    }
+
+    if (options?.deleteItems) {
+      state.items = state.items.filter((item) => item.categoryId !== categoryId);
+    } else if (options?.reassignToCategoryId) {
+      if (
+        options.reassignToCategoryId === categoryId ||
+        !state.categories.some((category) => category.id === options.reassignToCategoryId)
+      ) {
+        throw new Error("Reassignment category does not exist.");
+      }
+
+      const now = isoNow();
+      state.items.forEach((item) => {
+        if (item.categoryId === categoryId) {
+          item.categoryId = options.reassignToCategoryId!;
+          item.updatedAt = now;
+        }
+      });
+    }
+
+    state.categories = state.categories.filter((category) => category.id !== categoryId);
+  });
 }
 
-export async function getAllVocabularyItems(
-  db: SQLiteDatabase
-): Promise<VocabularyItem[]> {
-  const rows = await db.getAllAsync<any>(`
-    SELECT
-      vocabulary_items.*,
-      categories.name AS category_name,
-      categories.slug AS category_slug
-    FROM vocabulary_items
-    INNER JOIN categories ON categories.id = vocabulary_items.category_id
-    ORDER BY vocabulary_items.source_text COLLATE NOCASE ASC
-  `);
+export async function getAllVocabularyItems(): Promise<VocabularyItem[]> {
+  const { categories, items } = await getAppState();
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-  return rows.map(mapVocabularyRow);
+  return items
+    .map((item) => withCategory(item, categoryById))
+    .sort((left, right) => left.sourceText.localeCompare(right.sourceText));
 }
 
-export async function getVocabularyItemById(
-  db: SQLiteDatabase,
-  itemId: number
-) {
-  const row = await db.getFirstAsync<any>(
-    `
-      SELECT
-        vocabulary_items.*,
-        categories.name AS category_name,
-        categories.slug AS category_slug
-      FROM vocabulary_items
-      INNER JOIN categories ON categories.id = vocabulary_items.category_id
-      WHERE vocabulary_items.id = ?
-    `,
-    itemId
-  );
-
-  return row ? mapVocabularyRow(row) : null;
+export async function getVocabularyItemById(itemId: number) {
+  const { categories, items } = await getAppState();
+  const item = items.find((candidate) => candidate.id === itemId);
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  return item ? withCategory(item, categoryById) : null;
 }
 
-export async function createVocabularyItem(
-  db: SQLiteDatabase,
-  input: VocabularyItemInput
-) {
-  const now = isoNow();
-  await db.runAsync(
-    `
-      INSERT INTO vocabulary_items (
-        category_id,
-        source_text,
-        target_text,
-        source_language,
-        target_language,
-        examples_json,
-        synonyms_json,
-        image_kind,
-        image_uri,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    input.categoryId,
-    input.sourceText,
-    input.targetText,
-    input.sourceLanguage,
-    input.targetLanguage,
-    JSON.stringify(input.examples),
-    JSON.stringify(input.synonyms),
-    input.image.kind,
-    input.image.uri,
-    now,
-    now
-  );
+export async function createVocabularyItem(input: VocabularyItemInput) {
+  return updateAppState((state) => {
+    if (!state.categories.some((category) => category.id === input.categoryId)) {
+      throw new Error("Category does not exist.");
+    }
+
+    const now = isoNow();
+    state.items.push({
+      id: state.nextItemId++,
+      categoryId: input.categoryId,
+      sourceText: input.sourceText,
+      targetText: input.targetText,
+      sourceLanguage: input.sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      examples: input.examples,
+      synonyms: input.synonyms,
+      imageKind: input.image.kind,
+      imageUri: input.image.uri,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
 }
 
-export async function updateVocabularyItem(
-  db: SQLiteDatabase,
-  itemId: number,
-  input: VocabularyItemInput
-) {
-  await db.runAsync(
-    `
-      UPDATE vocabulary_items
-      SET
-        category_id = ?,
-        source_text = ?,
-        target_text = ?,
-        source_language = ?,
-        target_language = ?,
-        examples_json = ?,
-        synonyms_json = ?,
-        image_kind = ?,
-        image_uri = ?,
-        updated_at = ?
-      WHERE id = ?
-    `,
-    input.categoryId,
-    input.sourceText,
-    input.targetText,
-    input.sourceLanguage,
-    input.targetLanguage,
-    JSON.stringify(input.examples),
-    JSON.stringify(input.synonyms),
-    input.image.kind,
-    input.image.uri,
-    isoNow(),
-    itemId
-  );
+export async function updateVocabularyItem(itemId: number, input: VocabularyItemInput) {
+  return updateAppState((state) => {
+    const item = state.items.find((candidate) => candidate.id === itemId);
+
+    if (!item) {
+      throw new Error("Vocabulary item does not exist.");
+    }
+    if (!state.categories.some((category) => category.id === input.categoryId)) {
+      throw new Error("Category does not exist.");
+    }
+
+    Object.assign(item, {
+      categoryId: input.categoryId,
+      sourceText: input.sourceText,
+      targetText: input.targetText,
+      sourceLanguage: input.sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      examples: input.examples,
+      synonyms: input.synonyms,
+      imageKind: input.image.kind,
+      imageUri: input.image.uri,
+      updatedAt: isoNow(),
+    });
+  });
 }
 
-export async function deleteVocabularyItem(db: SQLiteDatabase, itemId: number) {
-  await db.runAsync("DELETE FROM vocabulary_items WHERE id = ?", itemId);
+export async function deleteVocabularyItem(itemId: number) {
+  return updateAppState((state) => {
+    state.items = state.items.filter((item) => item.id !== itemId);
+  });
 }
 
-export async function getAppSettings(db: SQLiteDatabase): Promise<AppSettings> {
-  const rows = await db.getAllAsync<{ key: string; value: string }>(
-    "SELECT key, value FROM app_settings"
-  );
+export async function getAppSettings(): Promise<AppSettings> {
+  return (await getAppState()).settings;
+}
 
-  const map = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+export async function updateAppSettings(settings: AppSettingsInput) {
+  return updateAppState((state) => {
+    state.settings = settings;
+  });
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const { categories, items } = await getAppState();
 
   return {
-    defaultSourceLanguage: map.default_source_language,
-    defaultTargetLanguage: map.default_target_language,
-    widgetRotationHours: Number(map.widget_rotation_hours),
-    widgetSeed: map.widget_seed,
+    totalItems: items.length,
+    totalCategories: categories.length,
+    withImages: items.filter((item) => item.imageKind !== "none").length,
   };
 }
 
-export async function updateAppSettings(
-  db: SQLiteDatabase,
-  settings: AppSettingsInput
-) {
-  const pairs = [
-    ["default_source_language", settings.defaultSourceLanguage],
-    ["default_target_language", settings.defaultTargetLanguage],
-    ["widget_rotation_hours", String(settings.widgetRotationHours)],
-    ["widget_seed", settings.widgetSeed],
-  ] as const;
-
-  for (const [key, value] of pairs) {
-    await db.runAsync(
-      `
-        INSERT INTO app_settings (key, value)
-        VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `,
-      key,
-      value
+export async function importVocabularyData(payload: ImportPayload) {
+  return updateAppState((state) => {
+    const categoryIdBySlug = new Map(
+      state.categories.map((category) => [category.slug, category.id])
     );
-  }
-}
+    const now = isoNow();
 
-export async function getDashboardStats(
-  db: SQLiteDatabase
-): Promise<DashboardStats> {
-  const row = await db.getFirstAsync<{
-    totalItems: number;
-    totalCategories: number;
-    withImages: number;
-  }>(`
-    SELECT
-      (SELECT COUNT(*) FROM vocabulary_items) AS totalItems,
-      (SELECT COUNT(*) FROM categories) AS totalCategories,
-      (SELECT COUNT(*) FROM vocabulary_items WHERE image_kind != 'none') AS withImages
-  `);
+    payload.categories.forEach((category) => {
+      if (categoryIdBySlug.has(category.slug)) {
+        return;
+      }
 
-  return {
-    totalItems: row?.totalItems ?? 0,
-    totalCategories: row?.totalCategories ?? 0,
-    withImages: row?.withImages ?? 0,
-  };
+      const id = state.nextCategoryId++;
+      state.categories.push({ ...category, id, createdAt: now, updatedAt: now });
+      categoryIdBySlug.set(category.slug, id);
+    });
+
+    const importedItems = payload.items.map((item) => {
+      const categoryId = categoryIdBySlug.get(item.category);
+
+      if (!categoryId) {
+        throw new Error(`Category "${item.category}" does not exist.`);
+      }
+
+      return {
+        id: state.nextItemId++,
+        categoryId,
+        sourceText: item.sourceText,
+        targetText: item.targetText,
+        sourceLanguage: item.sourceLanguage,
+        targetLanguage: item.targetLanguage,
+        examples: item.examples,
+        synonyms: item.synonyms,
+        imageKind: item.imageUrl ? ("remote" as const) : ("none" as const),
+        imageUri: item.imageUrl ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
+
+    state.items.push(...importedItems);
+  });
 }

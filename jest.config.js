@@ -11,7 +11,7 @@ module.exports = {
     "lib/db/schemas.ts",
     "lib/utils/random.ts",
     "lib/utils/strings.ts",
-    "lib/widget/selection.ts",
+    "lib/rotation/selection.ts",
   ],
   coverageThreshold: {
     global: {

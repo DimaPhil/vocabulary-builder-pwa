@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSQLiteContext } from "expo-sqlite";
 
 import { queryKeys } from "@/lib/constants/queryKeys";
 import {
@@ -21,41 +20,32 @@ import {
   updateCategory,
   updateVocabularyItem,
 } from "@/lib/db/repositories";
-import { syncWidgetSnapshot } from "@/lib/widget/snapshot";
 
 export function useCategoriesQuery() {
-  const db = useSQLiteContext();
-
   return useQuery({
     queryKey: queryKeys.categories,
-    queryFn: () => getCategories(db),
+    queryFn: getCategories,
   });
 }
 
 export function useVocabularyItemsQuery() {
-  const db = useSQLiteContext();
-
   return useQuery({
     queryKey: queryKeys.items,
-    queryFn: () => getAllVocabularyItems(db),
+    queryFn: getAllVocabularyItems,
   });
 }
 
 export function useSettingsQuery() {
-  const db = useSQLiteContext();
-
   return useQuery({
     queryKey: queryKeys.settings,
-    queryFn: () => getAppSettings(db),
+    queryFn: getAppSettings,
   });
 }
 
 export function useStatsQuery() {
-  const db = useSQLiteContext();
-
   return useQuery({
     queryKey: queryKeys.stats,
-    queryFn: () => getDashboardStats(db),
+    queryFn: getDashboardStats,
   });
 }
 
@@ -73,20 +63,15 @@ function useInvalidateVocabularyData() {
 }
 
 export function useCreateCategoryMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
-    mutationFn: async (input: CategoryInput) => {
-      await createCategory(db, input);
-      await syncWidgetSnapshot(db);
-    },
+    mutationFn: (input: CategoryInput) => createCategory(input),
     onSuccess: invalidate,
   });
 }
 
 export function useUpdateCategoryMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
@@ -96,16 +81,12 @@ export function useUpdateCategoryMutation() {
     }: {
       categoryId: number;
       input: CategoryInput;
-    }) => {
-      await updateCategory(db, categoryId, input);
-      await syncWidgetSnapshot(db);
-    },
+    }) => updateCategory(categoryId, input),
     onSuccess: invalidate,
   });
 }
 
 export function useDeleteCategoryMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
@@ -118,29 +99,21 @@ export function useDeleteCategoryMutation() {
         reassignToCategoryId?: number;
         deleteItems?: boolean;
       };
-    }) => {
-      await deleteCategory(db, categoryId, options);
-      await syncWidgetSnapshot(db);
-    },
+    }) => deleteCategory(categoryId, options),
     onSuccess: invalidate,
   });
 }
 
 export function useCreateVocabularyItemMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
-    mutationFn: async (input: VocabularyItemInput) => {
-      await createVocabularyItem(db, input);
-      await syncWidgetSnapshot(db);
-    },
+    mutationFn: (input: VocabularyItemInput) => createVocabularyItem(input),
     onSuccess: invalidate,
   });
 }
 
 export function useUpdateVocabularyItemMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
@@ -150,46 +123,33 @@ export function useUpdateVocabularyItemMutation() {
     }: {
       itemId: number;
       input: VocabularyItemInput;
-    }) => {
-      await updateVocabularyItem(db, itemId, input);
-      await syncWidgetSnapshot(db);
-    },
+    }) => updateVocabularyItem(itemId, input),
     onSuccess: invalidate,
   });
 }
 
 export function useDeleteVocabularyItemMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
-    mutationFn: async (itemId: number) => {
-      await deleteVocabularyItem(db, itemId);
-      await syncWidgetSnapshot(db);
-    },
+    mutationFn: (itemId: number) => deleteVocabularyItem(itemId),
     onSuccess: invalidate,
   });
 }
 
 export function useUpdateSettingsMutation() {
-  const db = useSQLiteContext();
   const invalidate = useInvalidateVocabularyData();
 
   return useMutation({
-    mutationFn: async (input: AppSettingsInput) => {
-      await updateAppSettings(db, input);
-      await syncWidgetSnapshot(db);
-    },
+    mutationFn: (input: AppSettingsInput) => updateAppSettings(input),
     onSuccess: invalidate,
   });
 }
 
 export function useCategoryUsageQuery(categoryId?: number) {
-  const db = useSQLiteContext();
-
   return useQuery({
     enabled: Boolean(categoryId),
     queryKey: [...queryKeys.categories, "usage", categoryId],
-    queryFn: () => getCategoryUsage(db, categoryId ?? 0),
+    queryFn: () => getCategoryUsage(categoryId ?? 0),
   });
 }

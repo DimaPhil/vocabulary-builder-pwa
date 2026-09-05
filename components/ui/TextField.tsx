@@ -1,10 +1,5 @@
 import { forwardRef } from "react";
-import {
-  StyleSheet,
-  TextInput,
-  type TextInputProps,
-  View,
-} from "react-native";
+import { StyleSheet, TextInput, type TextInputProps, View } from "react-native";
 
 import { Text } from "@/components/ui/Text";
 import { useAppTheme } from "@/lib/theme";
@@ -23,6 +18,8 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(
       <View style={styles.wrapper}>
         <Text variant="label">{label}</Text>
         <TextInput
+          accessibilityHint={error ?? helperText}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
           ref={ref}
           placeholderTextColor={theme.colors.textMuted}
           style={[
@@ -47,7 +44,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(
         ) : null}
       </View>
     );
-  }
+  },
 );
 
 TextField.displayName = "TextField";

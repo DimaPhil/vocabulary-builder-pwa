@@ -32,13 +32,13 @@ describe("schemas and utilities", () => {
     ).toHaveLength(1);
   });
 
-  it("validates widget settings range", () => {
+  it("validates rotating-word settings range", () => {
     expect(() =>
       appSettingsSchema.parse({
         defaultSourceLanguage: "en",
         defaultTargetLanguage: "ru",
-        widgetRotationHours: 0,
-        widgetSeed: "seed",
+        rotationHours: 0,
+        rotationSeed: "seed",
       })
     ).toThrow();
   });
@@ -50,7 +50,7 @@ describe("schemas and utilities", () => {
   });
 
   it("creates stable hash outputs and non-empty seeds", () => {
-    expect(hashString("widget-slot")).toBe(hashString("widget-slot"));
+    expect(hashString("rotation-slot")).toBe(hashString("rotation-slot"));
     expect(createSeed()).toContain("-");
   });
 });

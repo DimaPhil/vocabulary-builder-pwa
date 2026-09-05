@@ -7,8 +7,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Text } from "@/components/ui/Text";
-import { useCategoriesQuery, useSettingsQuery, useStatsQuery, useVocabularyItemsQuery } from "@/hooks/useVocabularyData";
-import { selectWidgetItem } from "@/lib/widget/selection";
+import {
+  useCategoriesQuery,
+  useSettingsQuery,
+  useStatsQuery,
+  useVocabularyItemsQuery,
+} from "@/hooks/useVocabularyData";
+import { selectRotatingWord } from "@/lib/rotation/selection";
 
 export function HomeScreen() {
   const statsQuery = useStatsQuery();
@@ -16,21 +21,19 @@ export function HomeScreen() {
   const categoriesQuery = useCategoriesQuery();
   const settingsQuery = useSettingsQuery();
 
-  const widgetPreview =
+  const wordOfTheMoment =
     itemsQuery.data && settingsQuery.data
-      ? selectWidgetItem(
+      ? selectRotatingWord(
           {
-            version: 1,
-            generatedAt: new Date().toISOString(),
-            rotationHours: settingsQuery.data.widgetRotationHours,
-            seed: settingsQuery.data.widgetSeed,
+            rotationHours: settingsQuery.data.rotationHours,
+            seed: settingsQuery.data.rotationSeed,
             items: itemsQuery.data.map((item) => ({
               id: item.id,
               sourceText: item.sourceText,
               targetText: item.targetText,
             })),
           },
-          new Date()
+          new Date(),
         )
       : null;
 
@@ -39,14 +42,11 @@ export function HomeScreen() {
       <SectionHeader
         eyebrow="Vocabulary Builder"
         title="Train your own words, without the overhead."
-        description="Everything stays on-device, the widget rotates automatically, and practice sessions stay fast even with a large personal vocabulary set."
+        description="Everything stays on-device, Word of the moment rotates automatically, and practice stays fast even with a large vocabulary set."
       />
 
       <View style={{ flexDirection: "row", gap: 12 }}>
-        <StatCard
-          label="Words"
-          value={statsQuery.data?.totalItems ?? 0}
-        />
+        <StatCard label="Words" value={statsQuery.data?.totalItems ?? 0} />
         <StatCard
           label="Categories"
           value={statsQuery.data?.totalCategories ?? 0}
@@ -72,20 +72,21 @@ export function HomeScreen() {
         </View>
       </Card>
 
-      {widgetPreview ? (
+      {wordOfTheMoment ? (
         <Card>
-          <Text variant="heading">Widget preview</Text>
+          <Text variant="heading">Word of the moment</Text>
           <Text variant="label">Current rotation</Text>
-          <Text variant="display">{widgetPreview.sourceText}</Text>
-          <Text>{widgetPreview.targetText}</Text>
+          <Text variant="display">{wordOfTheMoment.sourceText}</Text>
+          <Text>{wordOfTheMoment.targetText}</Text>
           <Text variant="caption">
-            Rotates every {settingsQuery.data?.widgetRotationHours ?? 1} hour(s).
+            Rotates every {settingsQuery.data?.rotationHours ?? 1}{" "}
+            hour(s).
           </Text>
         </Card>
       ) : (
         <EmptyState
-          title="Widget preview is empty"
-          description="Add at least one vocabulary item from Admin to start the hourly widget rotation."
+          title="Word of the moment is empty"
+          description="Add at least one vocabulary item from Admin to start the rotation."
         />
       )}
 

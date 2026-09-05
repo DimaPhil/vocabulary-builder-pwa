@@ -13,7 +13,14 @@ export function Checkbox({ checked, label, onPress }: CheckboxProps) {
   const theme = useAppTheme();
 
   return (
-    <Pressable onPress={onPress} style={styles.wrapper}>
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      hitSlop={8}
+      onPress={onPress}
+      style={styles.wrapper}
+    >
       <View
         style={[
           styles.box,
@@ -24,7 +31,9 @@ export function Checkbox({ checked, label, onPress }: CheckboxProps) {
             borderColor: checked ? theme.colors.primary : theme.colors.border,
           },
         ]}
-      />
+      >
+        {checked ? <Text color={theme.colors.white}>✓</Text> : null}
+      </View>
       <Text variant="body">{label}</Text>
     </Pressable>
   );
@@ -37,9 +46,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   box: {
+    alignItems: "center",
     borderRadius: 8,
     borderWidth: 1,
     height: 22,
+    justifyContent: "center",
     width: 22,
   },
 });

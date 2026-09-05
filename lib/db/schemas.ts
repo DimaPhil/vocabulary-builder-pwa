@@ -3,9 +3,9 @@ import { z } from "zod";
 import {
   DEFAULT_SOURCE_LANGUAGE,
   DEFAULT_TARGET_LANGUAGE,
-  DEFAULT_WIDGET_ROTATION_HOURS,
-  WIDGET_ROTATION_MAX_HOURS,
-  WIDGET_ROTATION_MIN_HOURS,
+  DEFAULT_ROTATION_HOURS,
+  ROTATION_MAX_HOURS,
+  ROTATION_MIN_HOURS,
 } from "@/lib/constants/app";
 import { slugify } from "@/lib/utils/strings";
 
@@ -63,13 +63,13 @@ export const vocabularyItemSchema = z.object({
 export const appSettingsSchema = z.object({
   defaultSourceLanguage: languageCodeSchema.default(DEFAULT_SOURCE_LANGUAGE),
   defaultTargetLanguage: languageCodeSchema.default(DEFAULT_TARGET_LANGUAGE),
-  widgetRotationHours: z
+  rotationHours: z
     .number()
     .int()
-    .min(WIDGET_ROTATION_MIN_HOURS)
-    .max(WIDGET_ROTATION_MAX_HOURS)
-    .default(DEFAULT_WIDGET_ROTATION_HOURS),
-  widgetSeed: z.string().trim().min(1),
+    .min(ROTATION_MIN_HOURS)
+    .max(ROTATION_MAX_HOURS)
+    .default(DEFAULT_ROTATION_HOURS),
+  rotationSeed: z.string().trim().min(1),
 });
 
 const importCategorySchema = z.object({
@@ -91,6 +91,114 @@ const importItemSchema = z.object({
 export const importPayloadSchema = z.object({
   categories: z.array(importCategorySchema),
   items: z.array(importItemSchema),
+});
+
+const storedCategorySchema = z.object({
+  id: z.number().int().positive(),
+  slug: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+});
+
+const storedVocabularyItemSchema = z
+  .object({
+    id: z.number().int().positive(),
+    categoryId: z.number().int().positive(),
+    sourceText: z.string().trim().min(1),
+    targetText: z.string().trim().min(1),
+    sourceLanguage: languageCodeSchema,
+    targetLanguage: languageCodeSchema,
+    examples: textListSchema,
+    synonyms: textListSchema,
+    imageKind: z.enum(["none", "remote", "local"]),
+    imageUri: z.string().nullable(),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .superRefine((item, context) => {
+    if (item.imageKind === "none" && item.imageUri !== null) {
+      context.addIssue({ code: "custom", message: "An item without an image cannot have an image URI." });
+    }
+    if (item.imageKind !== "none" && !item.imageUri) {
+      context.addIssue({ code: "custom", message: "An image URI is required." });
+    }
+    if (item.imageKind === "remote" && item.imageUri && !item.imageUri.startsWith("https://")) {
+      context.addIssue({ code: "custom", message: "Remote images must use HTTPS." });
+    }
+  });
+
+export const persistedAppStateSchema = z
+  .object({
+    version: z.literal(1),
+    nextCategoryId: z.number().int().positive(),
+    nextItemId: z.number().int().positive(),
+    categories: z.array(storedCategorySchema),
+    items: z.array(storedVocabularyItemSchema),
+    settings: appSettingsSchema,
+  })
+  .superRefine((state, context) => {
+    const categoryIds = new Set<number>();
+    const categorySlugs = new Set<string>();
+    const itemIds = new Set<number>();
+
+    state.categories.forEach((category, index) => {
+      if (categoryIds.has(category.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate category id ${category.id}.`,
+          path: ["categories", index, "id"],
+        });
+      }
+      if (categorySlugs.has(category.slug)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate category slug "${category.slug}".`,
+          path: ["categories", index, "slug"],
+        });
+      }
+      categoryIds.add(category.id);
+      categorySlugs.add(category.slug);
+    });
+
+    state.items.forEach((item, index) => {
+      if (itemIds.has(item.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate item id ${item.id}.`,
+          path: ["items", index, "id"],
+        });
+      }
+      if (!categoryIds.has(item.categoryId)) {
+        context.addIssue({
+          code: "custom",
+          message: `Unknown category id ${item.categoryId}.`,
+          path: ["items", index, "categoryId"],
+        });
+      }
+      itemIds.add(item.id);
+    });
+
+    if (state.categories.some((category) => category.id >= state.nextCategoryId)) {
+      context.addIssue({
+        code: "custom",
+        message: "Next category id must exceed every stored category id.",
+        path: ["nextCategoryId"],
+      });
+    }
+    if (state.items.some((item) => item.id >= state.nextItemId)) {
+      context.addIssue({
+        code: "custom",
+        message: "Next item id must exceed every stored item id.",
+        path: ["nextItemId"],
+      });
+    }
+  });
+
+export const appStateBackupSchema = z.object({
+  format: z.literal("vocabulary-builder-backup"),
+  exportedAt: z.string().min(1),
+  state: persistedAppStateSchema,
 });
 
 export type CategoryInput = z.infer<typeof categoryInputSchema>;

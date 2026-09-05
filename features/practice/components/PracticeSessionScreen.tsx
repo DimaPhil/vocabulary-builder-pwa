@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, View } from "react-native";
 import Animated, {
   interpolate,
@@ -15,7 +15,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { Text } from "@/components/ui/Text";
 import { currentPracticeSessionAtom } from "@/features/practice/atoms/session";
-import { buildPracticeCards } from "@/features/practice/schemas/session";
+import {
+  buildPracticeCards,
+  preparePracticeCard,
+} from "@/features/practice/schemas/session";
 import { useVocabularyItemsQuery } from "@/hooks/useVocabularyData";
 import { useAppTheme } from "@/lib/theme";
 
@@ -25,10 +28,20 @@ export function PracticeSessionScreen() {
   const session = useAtomValue(currentPracticeSessionAtom);
   const setSession = useSetAtom(currentPracticeSessionAtom);
   const { data: items = [] } = useVocabularyItemsQuery();
-  const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cards = useMemo(() => {
+    if (!session) {
+      return [];
+    }
+
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    return session.cardIds.flatMap((id) => {
+      const item = itemsById.get(id);
+      return item ? [preparePracticeCard(item, session.config)] : [];
+    });
+  }, [items, session]);
 
   useEffect(() => {
     return () => {
@@ -43,7 +56,7 @@ export function PracticeSessionScreen() {
     router.replace(destination);
   }
 
-  if (!session || session.cards.length === 0) {
+  if (!session || cards.length === 0) {
     return (
       <Page contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
         <View style={{ gap: 18 }}>
@@ -68,8 +81,9 @@ export function PracticeSessionScreen() {
     );
   }
 
-  const currentCard = session.cards[index];
-  const isFinished = index >= session.cards.length - 1;
+  const index = Math.min(session.index, cards.length - 1);
+  const currentCard = cards[index];
+  const isFinished = index >= cards.length - 1;
 
   function advanceToNextCard() {
     if (advanceTimerRef.current) {
@@ -79,7 +93,9 @@ export function PracticeSessionScreen() {
     setAdvancing(true);
     setRevealed(false);
     advanceTimerRef.current = setTimeout(() => {
-      setIndex((value) => value + 1);
+      setSession((current) =>
+        current ? { ...current, index: current.index + 1 } : current,
+      );
       setAdvancing(false);
       advanceTimerRef.current = null;
     }, 240);
@@ -96,13 +112,17 @@ export function PracticeSessionScreen() {
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Home" variant="ghost" onPress={() => leaveSession("/")} />
+          <Button
+            label="Home"
+            variant="ghost"
+            onPress={() => leaveSession("/")}
+          />
         </View>
       </View>
 
       <View style={{ gap: 10 }}>
         <Text variant="label">
-          Card {index + 1} of {session.cards.length}
+          Card {index + 1} of {cards.length}
         </Text>
         <Text variant="title">
           {session.config.mode === "source_to_target"
@@ -115,8 +135,13 @@ export function PracticeSessionScreen() {
         backContent={
           <View style={{ gap: 12 }}>
             <Text variant="caption">Answer</Text>
-            <Text variant="display">{currentCard.sourceText}</Text>
-            {currentCard.synonyms.length ? (
+            <Text variant="display">
+              {session.config.mode === "source_to_target"
+                ? currentCard.targetText
+                : currentCard.sourceText}
+            </Text>
+            {session.config.mode === "target_to_source" &&
+            currentCard.synonyms.length ? (
               <Text color={theme.colors.textMuted}>
                 Synonyms: {currentCard.synonyms.join(", ")}
               </Text>
@@ -135,6 +160,7 @@ export function PracticeSessionScreen() {
               <Text variant="display">{currentCard.targetText}</Text>
               {session.config.showImageHints && currentCard.imageUri ? (
                 <Image
+                  accessibilityLabel={`Hint for ${currentCard.targetText}`}
                   source={{ uri: currentCard.imageUri }}
                   style={{
                     borderRadius: 18,
@@ -143,7 +169,8 @@ export function PracticeSessionScreen() {
                   }}
                 />
               ) : null}
-              {session.config.showExamples && currentCard.maskedExamples.length ? (
+              {session.config.showExamples &&
+              currentCard.maskedExamples.length ? (
                 <View style={{ gap: 6 }}>
                   {currentCard.maskedExamples.map((example) => (
                     <Text key={example} color={theme.colors.textMuted}>
@@ -201,10 +228,12 @@ export function PracticeSessionScreen() {
               advanceTimerRef.current = null;
             }
             setSession({
-              cards: buildPracticeCards(items, session.config),
+              cardIds: buildPracticeCards(items, session.config).map(
+                (card) => card.id,
+              ),
               config: session.config,
+              index: 0,
             });
-            setIndex(0);
             setRevealed(false);
             setAdvancing(false);
           }}
@@ -255,11 +284,34 @@ function FlipCard({
   }));
 
   return (
-    <Pressable disabled={disabled} onPress={onToggle}>
+    <Pressable
+      accessibilityHint="Shows or hides the answer"
+      accessibilityLabel={revealed ? "Hide answer" : "Reveal answer"}
+      accessibilityRole="button"
+      accessibilityState={{ disabled, expanded: revealed }}
+      disabled={disabled}
+      onPress={onToggle}
+    >
       <Animated.View style={containerStyle}>
         <Card style={{ minHeight: 320 }}>
-          <Animated.View style={frontStyle}>{frontContent}</Animated.View>
-          <Animated.View style={backStyle}>{backContent}</Animated.View>
+          <Animated.View
+            accessibilityElementsHidden={revealed}
+            importantForAccessibility={
+              revealed ? "no-hide-descendants" : "auto"
+            }
+            style={frontStyle}
+          >
+            {frontContent}
+          </Animated.View>
+          <Animated.View
+            accessibilityElementsHidden={!revealed}
+            importantForAccessibility={
+              revealed ? "auto" : "no-hide-descendants"
+            }
+            style={backStyle}
+          >
+            {backContent}
+          </Animated.View>
         </Card>
       </Animated.View>
     </Pressable>

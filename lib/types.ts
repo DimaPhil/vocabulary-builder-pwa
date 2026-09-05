@@ -38,33 +38,47 @@ export type PracticeCard = VocabularyItem & {
   maskedExamples: string[];
 };
 
-export type WidgetConfig = {
-  rotationHours: number;
-};
-
-export type WidgetSnapshotItem = {
+export type RotatingWordItem = {
   id: number;
   sourceText: string;
   targetText: string;
 };
 
-export type WidgetSnapshot = {
-  version: number;
-  generatedAt: string;
+export type RotatingWordSnapshot = {
   rotationHours: number;
   seed: string;
-  items: WidgetSnapshotItem[];
+  items: RotatingWordItem[];
 };
 
 export type AppSettings = {
   defaultSourceLanguage: string;
   defaultTargetLanguage: string;
-  widgetRotationHours: number;
-  widgetSeed: string;
+  rotationHours: number;
+  rotationSeed: string;
 };
 
 export type DashboardStats = {
   totalItems: number;
   totalCategories: number;
   withImages: number;
+};
+
+export type StoredVocabularyItem = Omit<
+  VocabularyItem,
+  "categoryName" | "categorySlug"
+>;
+
+export type PersistedAppState = {
+  version: 1;
+  nextCategoryId: number;
+  nextItemId: number;
+  categories: Category[];
+  items: StoredVocabularyItem[];
+  settings: AppSettings;
+};
+
+export type AppStateBackup = {
+  format: "vocabulary-builder-backup";
+  exportedAt: string;
+  state: PersistedAppState;
 };

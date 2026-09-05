@@ -1,0 +1,69 @@
+{
+  "downloadedAt": "2026-08-20T04:24:57.493783+00:00",
+  "sources": [
+    {
+      "id": "cefrj",
+      "url": "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/master/cefrj-vocabulary-profile-1.5.csv",
+      "local_file": "sources/cache/cefrj-vocabulary-profile-1.5.csv",
+      "bytes": 233214,
+      "sha256": "b0dd3c635f1c9a4fdf1490c7e5b7c48e8bbe55b652ad0c9860a95f98e10ae498",
+      "license": "Citation required; commercial and research use allowed"
+    },
+    {
+      "id": "octanove",
+      "url": "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/master/octanove-vocabulary-profile-c1c2-1.0.csv",
+      "local_file": "sources/cache/octanove-vocabulary-profile-c1c2-1.0.csv",
+      "bytes": 46462,
+      "sha256": "18c33a407f2f89f7b8de9671c6d45fe3ea0bce45e7d2d7dcaab48d73e0f7b380",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "olp_readme",
+      "url": "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/master/README.md",
+      "local_file": "sources/cache/open-language-profiles-README.md",
+      "bytes": 1956,
+      "sha256": "8b69f7366fa3c7be328cb9ba02ceb7b3725697f36125bb75b85131d664b5e359",
+      "license": "Source terms and attribution"
+    },
+    {
+      "id": "freedict",
+      "url": "https://download.freedict.org/dictionaries/eng-rus/2025.11.23/freedict-eng-rus-2025.11.23.src.tar.xz",
+      "local_file": "sources/cache/freedict-eng-rus-2025.11.23.src.tar.xz",
+      "bytes": 3948540,
+      "sha256": "f3dadcc29d7df6e77edb13b98a2ba2c3fac002852eddd8b557637f0b13d39c39",
+      "license": "CC BY-SA 3.0"
+    },
+    {
+      "id": "oewn",
+      "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+      "local_file": "sources/cache/english-wordnet-2025.xml.gz",
+      "bytes": 11363503,
+      "sha256": "9ca6d1dcb75f822fdd66617f7d9da48142ace38dd544d6ad5e2feca1674ad3fe",
+      "license": "WordNet license and CC BY 4.0"
+    },
+    {
+      "id": "tatoeba",
+      "url": "https://www.manythings.org/anki/rus-eng.zip",
+      "local_file": "sources/cache/tatoeba-rus-eng.zip",
+      "bytes": 17447329,
+      "sha256": "1534e267976f43ae97e966d2ac9dc1e9128fdd0efdf08eceee21cd88ff20682c",
+      "license": "CC BY 2.0 France; per-sentence attribution retained"
+    },
+    {
+      "id": "statistical_en_ru",
+      "url": "https://huggingface.co/datasets/KvaytG/en-ru-statistical-dict-20m-corpus/resolve/main/dictionary.parquet?download=true",
+      "local_file": "sources/cache/en-ru-statistical-dictionary.parquet",
+      "bytes": 919507,
+      "sha256": "bb81cbbe3cb12d8cbed0400efa42ee1d44782a227aa03efe647b9a3a797dd0c8",
+      "license": "Apache 2.0"
+    },
+    {
+      "id": "wiktionary",
+      "url": "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz",
+      "local_file": "sources/cache/raw-wiktextract-data.jsonl.gz",
+      "bytes": 2826685087,
+      "sha256": "4514050b4e4f72cdcfdb9fd79e7eecf95c7fbbb9b0cb675f6f536334bc7b6691",
+      "license": "Wiktionary CC BY-SA 4.0 and GFDL"
+    }
+  ]
+}

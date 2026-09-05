@@ -4,8 +4,8 @@ import { View } from "react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { CategoryPicker } from "@/components/ui/CategoryPicker";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -15,7 +15,10 @@ import {
   practiceDraftAtom,
 } from "@/features/practice/atoms/session";
 import { buildPracticeCards } from "@/features/practice/schemas/session";
-import { useCategoriesQuery, useVocabularyItemsQuery } from "@/hooks/useVocabularyData";
+import {
+  useCategoriesQuery,
+  useVocabularyItemsQuery,
+} from "@/hooks/useVocabularyData";
 
 export function PracticeSetupScreen() {
   const router = useRouter();
@@ -27,7 +30,8 @@ export function PracticeSetupScreen() {
   const selectedItemsCount =
     draft.categoryIds.length === 0
       ? items.length
-      : items.filter((item) => draft.categoryIds.includes(item.categoryId)).length;
+      : items.filter((item) => draft.categoryIds.includes(item.categoryId))
+          .length;
 
   const canStart = selectedItemsCount > 0;
 
@@ -57,7 +61,9 @@ export function PracticeSetupScreen() {
                     mode: "source_to_target",
                   }))
                 }
-                variant={draft.mode === "source_to_target" ? "primary" : "secondary"}
+                variant={
+                  draft.mode === "source_to_target" ? "primary" : "secondary"
+                }
               />
               <Button
                 label="Translation → source"
@@ -67,7 +73,9 @@ export function PracticeSetupScreen() {
                     mode: "target_to_source",
                   }))
                 }
-                variant={draft.mode === "target_to_source" ? "primary" : "secondary"}
+                variant={
+                  draft.mode === "target_to_source" ? "primary" : "secondary"
+                }
               />
             </View>
           </Card>
@@ -75,29 +83,22 @@ export function PracticeSetupScreen() {
           <Card>
             <Text variant="heading">Scope</Text>
             <Text>
-              Leave all categories unselected to practice the entire vocabulary set.
+              Leave all categories unselected to practice the entire vocabulary
+              set.
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {categories.map((category) => {
-                const active = draft.categoryIds.includes(category.id);
-
-                return (
-                  <Chip
-                    key={category.id}
-                    active={active}
-                    label={category.name}
-                    onPress={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        categoryIds: active
-                          ? current.categoryIds.filter((id) => id !== category.id)
-                          : [...current.categoryIds, category.id],
-                      }))
-                    }
-                  />
-                );
-              })}
-            </View>
+            <CategoryPicker
+              categories={categories}
+              label="practice categories"
+              onToggle={(categoryId) =>
+                setDraft((current) => ({
+                  ...current,
+                  categoryIds: current.categoryIds.includes(categoryId)
+                    ? current.categoryIds.filter((id) => id !== categoryId)
+                    : [...current.categoryIds, categoryId],
+                }))
+              }
+              selectedIds={draft.categoryIds}
+            />
             <Text variant="caption">
               {selectedItemsCount} item(s) will be included.
             </Text>
@@ -138,8 +139,9 @@ export function PracticeSetupScreen() {
               const cards = buildPracticeCards(items, draft);
 
               setCurrentSession({
-                cards,
+                cardIds: cards.map((card) => card.id),
                 config: draft,
+                index: 0,
               });
               router.push("/practice/session");
             }}

@@ -1,7 +1,6 @@
-import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 
-import type { PracticeCard, PracticeSessionConfig } from "@/lib/types";
+import type { PracticeSessionConfig } from "@/lib/types";
 import { createMmkvStorage } from "@/lib/storage/jotai";
 
 export const practiceDraftAtom = atomWithStorage<PracticeSessionConfig>(
@@ -12,10 +11,11 @@ export const practiceDraftAtom = atomWithStorage<PracticeSessionConfig>(
     showExamples: false,
     showImageHints: false,
   },
-  createMmkvStorage<PracticeSessionConfig>()
+  createMmkvStorage<PracticeSessionConfig>(),
 );
 
-export const currentPracticeSessionAtom = atom<{
-  cards: PracticeCard[];
+export const currentPracticeSessionAtom = atomWithStorage<{
+  cardIds: number[];
   config: PracticeSessionConfig;
-} | null>(null);
+  index: number;
+} | null>("practice-session", null, createMmkvStorage());

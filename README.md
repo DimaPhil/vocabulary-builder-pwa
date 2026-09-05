@@ -1,246 +1,80 @@
-# Vocabulary Builder Mobile
+# Vocabulary Builder
 
-Vocabulary Builder Mobile is an iOS-first Expo / React Native app for building and practicing a personal vocabulary library. It is designed for small-scale personal use, with all data stored locally on the device and a companion home screen widget that rotates through saved words.
+An installable, local-first vocabulary trainer built with Expo Router and React Native Web. It runs as a Progressive Web App, so an iPhone can keep it on the Home Screen without an Apple Developer subscription or weekly re-signing.
 
-## Highlights
+## Features
 
-- Local-first vocabulary management with SQLite
-- Category-based organization
-- Single-item CRUD plus JSON batch import
-- Configurable source and target languages
+- 7,360 built-in English vocabulary records across CEFR B1-C2
+- Category and vocabulary-item management
+- JSON import, preview, backup, and restore
+- Library search and filters
+- Source-to-translation and translation-to-source practice
 - Optional examples, synonyms, and images
-- Practice sessions with two study directions
-- iOS home screen widget with hourly rotation
-- CI checks for linting, typechecking, tests, and coverage
+- Local browser storage with no account or backend
+- Offline app shell and bundled lessons after the first successful load
+- Prompted updates, so a new deployment does not replace the open app unexpectedly
 
-## Product Scope
+## Local development
 
-This MVP focuses on:
-
-- iOS first
-- Personal usage
-- No backend or sign-in
-- Local storage only
-- Single-category vocabulary items
-
-The current UX targets large iPhones, with explicit support for devices in the iPhone 15 Pro Max and iPhone 17 Pro class.
-
-## Tech Stack
-
-- Expo 54
-- React Native 0.81
-- Expo Router
-- TypeScript with strict checking
-- `expo-sqlite` for persistent app data
-- Jotai for lightweight client state
-- MMKV for local UI preferences
-- Zod for validation
-- Jest + Testing Library for tests
-- GitHub Actions for CI
-- Native iOS widget extension via `react-native-widget-extension`
-
-## Core Features
-
-### Vocabulary Admin
-
-- Create, edit, and delete categories
-- Create, edit, and delete vocabulary items
-- Store:
-  - source text
-  - translation or explanation
-  - source language
-  - target language
-  - optional examples
-  - optional synonyms
-  - optional image
-- Add images from:
-  - local photo library
-  - remote image URL
-  - automatic Wikimedia/Wikipedia lookup where possible
-
-### Batch Import
-
-- Import one JSON payload with categories and items
-- Validate the entire payload before commit
-- Append-only import behavior
-- Optional auto-fill for missing item images during preview
-
-### Practice
-
-- Practice the whole vocabulary set or selected categories
-- `source -> translation`
-- `translation -> source`
-- Optional image hints
-- Optional masked examples
-- Explicit session exit actions so the user can always go back to Practice or Home
-
-### Widget
-
-- Shows a deterministic rotating word and its translation
-- Rotation interval is configurable in Admin
-- Uses a lightweight shared snapshot instead of reading the full SQLite schema directly
-
-## JSON Import Format
-
-```json
-{
-  "categories": [
-    {
-      "slug": "kitchen",
-      "name": "Kitchen"
-    }
-  ],
-  "items": [
-    {
-      "category": "kitchen",
-      "sourceText": "whisk",
-      "targetText": "венчик",
-      "sourceLanguage": "en",
-      "targetLanguage": "ru",
-      "examples": ["Whisk the eggs until they are smooth."],
-      "synonyms": [],
-      "imageUrl": "https://example.com/whisk.jpg"
-    }
-  ]
-}
-```
-
-## Local Development
-
-### Prerequisites
-
-- macOS
-- Xcode
-- iOS Simulator runtime installed
-- Node.js 22
-- CocoaPods
-
-Recommended setup:
-
-```bash
-xcode-select --install
-brew install cocoapods
-```
-
-If you use `nvm`:
-
-```bash
-nvm install 22
-nvm use 22
-```
-
-### Install Dependencies
+Requirements: Node.js 22 and npm.
 
 ```bash
 npm install
+npm run web
 ```
 
-### Run Quality Checks
+Run all checks:
 
 ```bash
-npm run lint
-npm run typecheck
-npm run test
-npm run test:coverage
 npm run ci:check
 ```
 
-### Run on the iOS Simulator
+Build and preview the production PWA:
 
 ```bash
-npm run start:clear
+npm run build:web
+python3 -m http.server 4173 -d dist
 ```
 
-In a separate terminal:
+Open `http://localhost:4173`. Localhost is treated as a secure context for service-worker testing.
 
-```bash
-npm run ios
-```
+## Install on iPhone
 
-Or target a specific simulator:
+1. Open the deployed HTTPS URL in Safari.
+2. Tap Share, then **Add to Home Screen**.
+3. Enable **Open as Web App** if iOS shows the option, then tap **Add**.
+4. Launch Vocabulary Builder from its Home Screen icon.
 
-```bash
-npx expo run:ios --device "iPhone 16 Pro Max"
-```
+Open the app online once before relying on offline mode. The app shell, built-in seed, and attribution files are cached during service-worker installation. Remote image URLs require a network connection unless the browser happens to retain them in its normal HTTP cache.
 
-If native assets or native config change, regenerate iOS first:
+## Data and updates
 
-```bash
-npm run prebuild:ios
-```
+Vocabulary and settings stay in IndexedDB on the current browser profile. Browser storage is not a backup: export JSON periodically, especially before clearing Safari website data or moving to another phone.
 
-This command recreates the generated `ios/` directory from scratch, which avoids duplicate widget-target configuration during repeated prebuilds.
+When a deployment installs in the background, the current app keeps running and asks before reloading into the new version. Updating the app does not clear IndexedDB.
 
-## Install on a Physical iPhone
+## Deploy to Vercel
 
-Because this app includes a native widget extension, it must be installed as a native development build or release build. Expo Go is not enough.
+No backend, environment variables, static IP, or VPN is required.
 
-### Option 1: Xcode Direct Install
+1. Import this repository into Vercel.
+2. Keep the build settings from `vercel.json`: `npm run build:web` and output directory `dist`.
+3. Deploy, then open the HTTPS production URL in Safari and follow the installation steps above.
 
-1. Install dependencies with `npm install`.
-2. Generate native iOS files:
+`vercel.json` prevents browsers from pinning an old service worker. Expo Router exports static HTML, so no SPA rewrite is needed.
 
-```bash
-npm run prebuild:ios
-```
+## Dataset and licensing
 
-3. Open `ios/VocabularyBuilder.xcworkspace`.
+The deployable seed lives in `public/data/seed/all.json`. Its source and media provenance are kept under [`public/data/seed/attribution`](public/data/seed/attribution). The large research caches and downloaded media corpus are intentionally excluded.
 
-4. In Xcode:
-   - select your iPhone as the run target
-   - set your Apple Developer Team under Signing & Capabilities for both the main app target and the widget target
-   - build and run
-
-This installs the app directly onto your iPhone.
-
-### Option 2: EAS Build
-
-If you want distributable builds instead of direct Xcode deployment:
-
-```bash
-npx eas login
-npx eas build --platform ios --profile preview
-```
-
-Then install the generated build through the link or artifact provided by EAS.
-
-## Widget Notes
-
-- The widget is iOS-only in this MVP
-- After adding or editing vocabulary, the app refreshes the shared widget snapshot
-- Add the widget from the iPhone home screen after launching the app once
-
-## CI
-
-GitHub Actions runs:
-
-- lint
-- typecheck
-- tests
-- coverage
-- macOS iOS build verification
-
-For merge protection, configure branch protection in GitHub and require the `quality` and `ios-build` checks.
-
-## Git Hooks
-
-Husky hooks are configured to catch issues earlier:
-
-- `pre-commit`: lint staged files
-- `pre-push`: lint, typecheck, and tests
-
-## Project Structure
+## Project structure
 
 ```text
-app/                Expo Router route entry points
-components/         Shared UI primitives
-features/           Feature-first screens, state, and schemas
-hooks/              Query and domain hooks
-lib/                Shared infrastructure and utilities
-widgets/            Native iOS widget extension
-__tests__/          Unit and integration-oriented tests
+app/                 Expo Router routes and root HTML
+components/          Shared UI primitives
+features/            Admin, library, home, and practice screens
+lib/                 IndexedDB, storage, domain, and utility code
+public/              PWA manifest, icons, seed, and attribution
+workbox-config.cjs   Offline precache policy
+vercel.json          Static deployment and response headers
 ```
-
-## Current Status
-
-This repository contains the MVP implementation, including local vocabulary management, practice mode, widget support, automated import validation, and CI setup. Android is intentionally deferred for now.

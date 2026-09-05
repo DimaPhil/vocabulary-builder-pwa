@@ -14,6 +14,9 @@ export function Chip({ active, label, onPress }: ChipProps) {
 
   return (
     <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[
         styles.chip,
@@ -21,9 +24,7 @@ export function Chip({ active, label, onPress }: ChipProps) {
           backgroundColor: active
             ? theme.colors.primarySoft
             : theme.colors.surface,
-          borderColor: active
-            ? theme.colors.borderStrong
-            : theme.colors.border,
+          borderColor: active ? theme.colors.borderStrong : theme.colors.border,
         },
       ]}
     >

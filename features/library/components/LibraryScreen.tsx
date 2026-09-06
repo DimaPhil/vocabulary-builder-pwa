@@ -60,6 +60,10 @@ export function LibraryScreen() {
       <CategoryPicker
         categories={categories}
         label="library categories"
+        onChange={(categoryIds) => {
+          setFilters((current) => ({ ...current, categoryIds }));
+          setVisibleCount(30);
+        }}
         onToggle={(categoryId) => {
           setFilters((current) => ({
             ...current,

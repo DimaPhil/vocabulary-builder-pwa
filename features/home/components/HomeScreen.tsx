@@ -8,18 +8,23 @@ import { Page } from "@/components/ui/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Text } from "@/components/ui/Text";
 import {
-  useCategoriesQuery,
+  useLearningProgressQuery,
   useSettingsQuery,
   useStatsQuery,
   useVocabularyItemsQuery,
 } from "@/hooks/useVocabularyData";
+import { summarizeLearning } from "@/features/practice/services/learning";
 import { selectRotatingWord } from "@/lib/rotation/selection";
 
 export function HomeScreen() {
   const statsQuery = useStatsQuery();
   const itemsQuery = useVocabularyItemsQuery();
-  const categoriesQuery = useCategoriesQuery();
+  const progressQuery = useLearningProgressQuery();
   const settingsQuery = useSettingsQuery();
+  const learning = summarizeLearning(
+    itemsQuery.data ?? [],
+    progressQuery.data ?? [],
+  );
 
   const wordOfTheMoment =
     itemsQuery.data && settingsQuery.data
@@ -79,8 +84,7 @@ export function HomeScreen() {
           <Text variant="display">{wordOfTheMoment.sourceText}</Text>
           <Text>{wordOfTheMoment.targetText}</Text>
           <Text variant="caption">
-            Rotates every {settingsQuery.data?.rotationHours ?? 1}{" "}
-            hour(s).
+            Rotates every {settingsQuery.data?.rotationHours ?? 1} hour(s).
           </Text>
         </Card>
       ) : (
@@ -91,17 +95,41 @@ export function HomeScreen() {
       )}
 
       <Card>
-        <Text variant="heading">Coverage</Text>
-        {categoriesQuery.data?.length ? (
-          <View style={{ gap: 8 }}>
-            {categoriesQuery.data.slice(0, 6).map((category) => (
-              <Text key={category.id}>{category.name}</Text>
+        <Text variant="heading">Learning progress</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+          <ProgressStat label="Due" value={learning.due} />
+          <ProgressStat label="Needs work" value={learning.needsWork} />
+          <ProgressStat label="Mastered" value={learning.mastered} />
+          <ProgressStat label="Started" value={learning.started} />
+        </View>
+        <Text>
+          Coverage: {learning.started} of {learning.total} words
+        </Text>
+        <Text variant="caption">
+          Self-rated recall · 7 days: {formatRecall(learning.recall7)} · 30
+          days: {formatRecall(learning.recall30)}
+        </Text>
+      </Card>
+
+      {learning.areasToImprove.length ? (
+        <Card>
+          <Text variant="heading">Areas to improve</Text>
+          <View style={{ gap: 10 }}>
+            {learning.areasToImprove.map((area) => (
+              <View key={area.categoryId} style={{ gap: 2 }}>
+                <Text variant="bodyStrong">{area.categoryName}</Text>
+                <Text variant="caption">
+                  {area.needsWork} needs work · {area.due} due · 30-day recall{" "}
+                  {formatRecall(area.recall30)}
+                </Text>
+              </View>
             ))}
           </View>
-        ) : (
-          <Text>No categories yet.</Text>
-        )}
-      </Card>
+          <Link href="/(tabs)/practice" asChild>
+            <Button label="Practice weak areas" variant="secondary" />
+          </Link>
+        </Card>
+      ) : null}
     </Page>
   );
 }
@@ -113,4 +141,17 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <Text variant="display">{value}</Text>
     </Card>
   );
+}
+
+function ProgressStat({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={{ minWidth: 64 }}>
+      <Text variant="display">{value}</Text>
+      <Text variant="caption">{label}</Text>
+    </View>
+  );
+}
+
+function formatRecall(value: number | null) {
+  return value === null ? "No data" : `${value}%`;
 }

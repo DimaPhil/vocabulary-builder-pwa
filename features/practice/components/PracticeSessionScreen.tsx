@@ -1,7 +1,7 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Pressable, View } from "react-native";
+import { useMemo, useState } from "react";
+import { ActivityIndicator, Image, Pressable, View } from "react-native";
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -15,12 +15,15 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { Text } from "@/components/ui/Text";
 import { currentPracticeSessionAtom } from "@/features/practice/atoms/session";
+import { preparePracticeCard } from "@/features/practice/schemas/session";
+import { requeueMissedCard } from "@/features/practice/services/learning";
 import {
-  buildPracticeCards,
-  preparePracticeCard,
-} from "@/features/practice/schemas/session";
-import { useVocabularyItemsQuery } from "@/hooks/useVocabularyData";
+  useRecordVocabularyReviewMutation,
+  useVocabularyItemsQuery,
+} from "@/hooks/useVocabularyData";
 import { useAppTheme } from "@/lib/theme";
+import type { ReviewResult } from "@/lib/types";
+import { shuffleArray } from "@/lib/utils/random";
 
 export function PracticeSessionScreen() {
   const router = useRouter();
@@ -28,41 +31,70 @@ export function PracticeSessionScreen() {
   const session = useAtomValue(currentPracticeSessionAtom);
   const setSession = useSetAtom(currentPracticeSessionAtom);
   const { data: items = [] } = useVocabularyItemsQuery();
+  const recordReview = useRecordVocabularyReviewMutation();
   const [revealed, setRevealed] = useState(false);
   const [advancing, setAdvancing] = useState(false);
-  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cards = useMemo(() => {
-    if (!session) {
-      return [];
-    }
-
-    const itemsById = new Map(items.map((item) => [item.id, item]));
-    return session.cardIds.flatMap((id) => {
-      const item = itemsById.get(id);
-      return item ? [preparePracticeCard(item, session.config)] : [];
-    });
-  }, [items, session]);
-
-  useEffect(() => {
-    return () => {
-      if (advanceTimerRef.current) {
-        clearTimeout(advanceTimerRef.current);
-      }
-    };
-  }, []);
+  const [error, setError] = useState<string | null>(null);
+  const itemsById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
+    [items],
+  );
+  const index = session
+    ? Math.min(session.index, Math.max(session.cardIds.length - 1, 0))
+    : 0;
+  const currentItem = session
+    ? itemsById.get(session.cardIds[index])
+    : undefined;
+  const config = session?.config;
+  const currentCard = useMemo(
+    () =>
+      currentItem && config ? preparePracticeCard(currentItem, config) : null,
+    [config, currentItem],
+  );
 
   function leaveSession(destination: "/" | "/practice") {
     setSession(null);
     router.replace(destination);
   }
 
-  if (!session || cards.length === 0) {
+  async function rateAnswer(result: ReviewResult) {
+    if (!session || !currentCard || advancing) return;
+
+    setAdvancing(true);
+    setRevealed(false);
+    setError(null);
+
+    try {
+      await recordReview.mutateAsync({ itemId: currentCard.id, result });
+      const cardIds =
+        result === "missed"
+          ? requeueMissedCard(session.cardIds, index, currentCard.id)
+          : session.cardIds;
+
+      if (index >= cardIds.length - 1) {
+        leaveSession("/practice");
+      } else {
+        setSession({ ...session, cardIds, index: index + 1 });
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not save your answer.",
+      );
+      setRevealed(true);
+    } finally {
+      setAdvancing(false);
+    }
+  }
+
+  if (!session || !currentCard) {
     return (
       <Page contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
         <View style={{ gap: 18 }}>
           <EmptyState
             title="No active session"
-            description="Go back to Practice and start a new shuffled session."
+            description="Go back to Practice and start a new session."
           />
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
@@ -79,26 +111,6 @@ export function PracticeSessionScreen() {
         </View>
       </Page>
     );
-  }
-
-  const index = Math.min(session.index, cards.length - 1);
-  const currentCard = cards[index];
-  const isFinished = index >= cards.length - 1;
-
-  function advanceToNextCard() {
-    if (advanceTimerRef.current) {
-      clearTimeout(advanceTimerRef.current);
-    }
-
-    setAdvancing(true);
-    setRevealed(false);
-    advanceTimerRef.current = setTimeout(() => {
-      setSession((current) =>
-        current ? { ...current, index: current.index + 1 } : current,
-      );
-      setAdvancing(false);
-      advanceTimerRef.current = null;
-    }, 240);
   }
 
   return (
@@ -122,120 +134,122 @@ export function PracticeSessionScreen() {
 
       <View style={{ gap: 10 }}>
         <Text variant="label">
-          Card {index + 1} of {cards.length}
+          Card {index + 1} of {session.cardIds.length}
         </Text>
         <Text variant="title">
           {session.config.mode === "source_to_target"
-            ? "Source → translation"
-            : "Translation → source"}
+            ? "English → translation"
+            : "Translation → English"}
         </Text>
       </View>
 
-      <FlipCard
-        backContent={
-          <View style={{ gap: 12 }}>
-            <Text variant="caption">Answer</Text>
-            <Text variant="display">
-              {session.config.mode === "source_to_target"
-                ? currentCard.targetText
-                : currentCard.sourceText}
-            </Text>
-            {session.config.mode === "target_to_source" &&
-            currentCard.synonyms.length ? (
-              <Text color={theme.colors.textMuted}>
-                Synonyms: {currentCard.synonyms.join(", ")}
+      {advancing ? (
+        <Card
+          accessibilityLabel="Loading next word"
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 320,
+          }}
+        >
+          <ActivityIndicator color={theme.colors.primary} size="large" />
+          <Text variant="heading">Loading next word…</Text>
+        </Card>
+      ) : (
+        <FlipCard
+          backContent={
+            <View style={{ gap: 12 }}>
+              <Text variant="caption">Answer</Text>
+              <Text variant="display">
+                {session.config.mode === "source_to_target"
+                  ? currentCard.targetText
+                  : currentCard.sourceText}
               </Text>
-            ) : null}
-          </View>
-        }
-        frontContent={
-          session.config.mode === "source_to_target" ? (
-            <View style={{ gap: 12 }}>
-              <Text variant="caption">Prompt</Text>
-              <Text variant="display">{currentCard.sourceText}</Text>
-            </View>
-          ) : (
-            <View style={{ gap: 12 }}>
-              <Text variant="caption">Prompt</Text>
-              <Text variant="display">{currentCard.targetText}</Text>
-              {session.config.showImageHints && currentCard.imageUri ? (
-                <Image
-                  accessibilityLabel={`Hint for ${currentCard.targetText}`}
-                  source={{ uri: currentCard.imageUri }}
-                  style={{
-                    borderRadius: 18,
-                    height: 180,
-                    width: "100%",
-                  }}
-                />
-              ) : null}
-              {session.config.showExamples &&
-              currentCard.maskedExamples.length ? (
-                <View style={{ gap: 6 }}>
-                  {currentCard.maskedExamples.map((example) => (
-                    <Text key={example} color={theme.colors.textMuted}>
-                      {example}
-                    </Text>
-                  ))}
-                </View>
+              {session.config.mode === "target_to_source" &&
+              currentCard.synonyms.length ? (
+                <Text color={theme.colors.textMuted}>
+                  Synonyms: {currentCard.synonyms.join(", ")}
+                </Text>
               ) : null}
             </View>
-          )
-        }
-        disabled={advancing}
-        key={currentCard.id}
-        revealed={revealed}
-        onToggle={() => setRevealed((value) => !value)}
-      />
+          }
+          frontContent={
+            session.config.mode === "source_to_target" ? (
+              <View style={{ gap: 12 }}>
+                <Text variant="caption">Prompt</Text>
+                <Text variant="display">{currentCard.sourceText}</Text>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                <Text variant="caption">Prompt</Text>
+                <Text variant="display">{currentCard.targetText}</Text>
+                {session.config.showImageHints && currentCard.imageUri ? (
+                  <Image
+                    accessibilityLabel={`Hint for ${currentCard.targetText}`}
+                    source={{ uri: currentCard.imageUri }}
+                    style={{ borderRadius: 18, height: 180, width: "100%" }}
+                  />
+                ) : null}
+                {session.config.showExamples &&
+                currentCard.maskedExamples.length ? (
+                  <View style={{ gap: 6 }}>
+                    {currentCard.maskedExamples.map((example) => (
+                      <Text key={example} color={theme.colors.textMuted}>
+                        {example}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            )
+          }
+          key={currentCard.id}
+          revealed={revealed}
+          onToggle={() => setRevealed((value) => !value)}
+        />
+      )}
+
+      {error ? <Text color={theme.colors.danger}>{error}</Text> : null}
 
       <View style={{ gap: 10 }}>
+        {!revealed ? (
+          <Button
+            disabled={advancing}
+            label={advancing ? "Loading next word…" : "Reveal answer"}
+            onPress={() => setRevealed(true)}
+          />
+        ) : (
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                disabled={advancing}
+                label="Missed it"
+                onPress={() => rateAnswer("missed")}
+                variant="secondary"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                disabled={advancing}
+                label="Remembered"
+                onPress={() => rateAnswer("remembered")}
+              />
+            </View>
+          </View>
+        )}
         <Button
           disabled={advancing}
-          label={
-            advancing
-              ? "Loading next card..."
-              : revealed
-                ? isFinished
-                  ? "Finish session"
-                  : "Next card"
-                : "Reveal answer"
-          }
-          onPress={() => {
-            if (advancing) {
-              return;
-            }
-
-            if (!revealed) {
-              setRevealed(true);
-              return;
-            }
-
-            if (isFinished) {
-              leaveSession("/practice");
-              return;
-            }
-
-            advanceToNextCard();
-          }}
-        />
-        <Button
-          disabled={advancing}
-          label="Reshuffle"
+          label="Reshuffle remaining"
           variant="secondary"
           onPress={() => {
-            if (advanceTimerRef.current) {
-              clearTimeout(advanceTimerRef.current);
-              advanceTimerRef.current = null;
-            }
             setSession({
-              cardIds: buildPracticeCards(items, session.config).map(
-                (card) => card.id,
-              ),
-              config: session.config,
-              index: 0,
+              ...session,
+              cardIds: [
+                ...session.cardIds.slice(0, index),
+                ...shuffleArray(session.cardIds.slice(index)),
+              ],
             });
             setRevealed(false);
-            setAdvancing(false);
           }}
         />
         <Button
@@ -251,13 +265,11 @@ export function PracticeSessionScreen() {
 
 function FlipCard({
   backContent,
-  disabled = false,
   frontContent,
   revealed,
   onToggle,
 }: {
   backContent: React.ReactNode;
-  disabled?: boolean;
   frontContent: React.ReactNode;
   revealed: boolean;
   onToggle: () => void;
@@ -288,8 +300,7 @@ function FlipCard({
       accessibilityHint="Shows or hides the answer"
       accessibilityLabel={revealed ? "Hide answer" : "Reveal answer"}
       accessibilityRole="button"
-      accessibilityState={{ disabled, expanded: revealed }}
-      disabled={disabled}
+      accessibilityState={{ expanded: revealed }}
       onPress={onToggle}
     >
       <Animated.View style={containerStyle}>

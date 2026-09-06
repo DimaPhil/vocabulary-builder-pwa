@@ -9,17 +9,23 @@ import {
 import {
   createCategory,
   createVocabularyItem,
+  clearNeedsWork,
   deleteCategory,
   deleteVocabularyItem,
   getAppSettings,
   getCategories,
   getCategoryUsage,
   getDashboardStats,
+  getLearningProgress,
   getAllVocabularyItems,
+  recordVocabularyReview,
+  relearnVocabularyItems,
+  resetVocabularyProgress,
   updateAppSettings,
   updateCategory,
   updateVocabularyItem,
 } from "@/lib/db/repositories";
+import type { ReviewResult } from "@/lib/types";
 
 export function useCategoriesQuery() {
   return useQuery({
@@ -49,6 +55,56 @@ export function useStatsQuery() {
   });
 }
 
+export function useLearningProgressQuery() {
+  return useQuery({
+    queryKey: queryKeys.progress,
+    queryFn: getLearningProgress,
+  });
+}
+
+function useInvalidateLearningProgress() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+}
+
+export function useRecordVocabularyReviewMutation() {
+  const invalidate = useInvalidateLearningProgress();
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      result,
+    }: {
+      itemId: number;
+      result: ReviewResult;
+    }) => recordVocabularyReview(itemId, result),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRelearnVocabularyItemsMutation() {
+  const invalidate = useInvalidateLearningProgress();
+  return useMutation({
+    mutationFn: (itemIds: number[]) => relearnVocabularyItems(itemIds),
+    onSuccess: invalidate,
+  });
+}
+
+export function useClearNeedsWorkMutation() {
+  const invalidate = useInvalidateLearningProgress();
+  return useMutation({
+    mutationFn: (itemIds: number[]) => clearNeedsWork(itemIds),
+    onSuccess: invalidate,
+  });
+}
+
+export function useResetVocabularyProgressMutation() {
+  const invalidate = useInvalidateLearningProgress();
+  return useMutation({
+    mutationFn: (itemIds: number[]) => resetVocabularyProgress(itemIds),
+    onSuccess: invalidate,
+  });
+}
+
 function useInvalidateVocabularyData() {
   const queryClient = useQueryClient();
 
@@ -56,6 +112,7 @@ function useInvalidateVocabularyData() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.categories }),
       queryClient.invalidateQueries({ queryKey: queryKeys.items }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.progress }),
       queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
       queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
     ]);

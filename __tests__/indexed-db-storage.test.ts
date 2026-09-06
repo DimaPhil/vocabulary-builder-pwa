@@ -1,5 +1,10 @@
 import { importPayloadSchema, persistedAppStateSchema } from "@/lib/db/schemas";
-import { importVocabularyData } from "@/lib/db/repositories";
+import {
+  getLearningProgress,
+  importVocabularyData,
+  recordVocabularyReview,
+  resetVocabularyProgress,
+} from "@/lib/db/repositories";
 import {
   createInitialState,
   exportAppState,
@@ -45,7 +50,7 @@ describe("IndexedDB app state", () => {
             synonyms: [],
           },
         ],
-      })
+      }),
     ).rejects.toThrow('Category "missing" does not exist.');
 
     const after = await getAppState();
@@ -55,10 +60,21 @@ describe("IndexedDB app state", () => {
   });
 
   it("round-trips a validated backup", async () => {
+    await recordVocabularyReview(
+      1,
+      "missed",
+      new Date("2026-09-05T12:00:00.000Z"),
+    );
     const backup = await exportAppState();
+    await resetVocabularyProgress([1]);
     await restoreAppState(backup);
 
     expect((await getAppState()).items).toHaveLength(7_360);
-    await expect(restoreAppState("not json")).rejects.toThrow("Backup must be valid JSON.");
+    expect(await getLearningProgress()).toMatchObject([
+      { itemId: 1, needsWork: true, totalMisses: 1 },
+    ]);
+    await expect(restoreAppState("not json")).rejects.toThrow(
+      "Backup must be valid JSON.",
+    );
   });
 });

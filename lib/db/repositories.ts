@@ -4,13 +4,26 @@ import type {
   ImportPayload,
   VocabularyItemInput,
 } from "@/lib/db/schemas";
-import { getAppState, updateAppState } from "@/lib/storage/indexedDb";
-import type { AppSettings, Category, DashboardStats, VocabularyItem } from "@/lib/types";
+import { applyReviewResult } from "@/features/practice/services/learning";
+import {
+  getAllVocabularyProgress,
+  getAppState,
+  updateAppState,
+  updateVocabularyProgress,
+} from "@/lib/storage/indexedDb";
+import type {
+  AppSettings,
+  Category,
+  DashboardStats,
+  ReviewResult,
+  VocabularyItem,
+  VocabularyProgress,
+} from "@/lib/types";
 import { isoNow } from "@/lib/utils/date";
 
 function withCategory(
   item: Omit<VocabularyItem, "categoryName" | "categorySlug">,
-  categories: Map<number, Category>
+  categories: Map<number, Category>,
 ) {
   const category = categories.get(item.categoryId);
 
@@ -23,7 +36,9 @@ function withCategory(
 
 export async function getCategories(): Promise<Category[]> {
   const { categories } = await getAppState();
-  return [...categories].sort((left, right) => left.name.localeCompare(right.name));
+  return [...categories].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
 }
 
 export async function createCategory(input: CategoryInput) {
@@ -45,14 +60,17 @@ export async function createCategory(input: CategoryInput) {
 
 export async function updateCategory(categoryId: number, input: CategoryInput) {
   return updateAppState((state) => {
-    const category = state.categories.find((candidate) => candidate.id === categoryId);
+    const category = state.categories.find(
+      (candidate) => candidate.id === categoryId,
+    );
 
     if (!category) {
       throw new Error("Category does not exist.");
     }
     if (
       state.categories.some(
-        (candidate) => candidate.id !== categoryId && candidate.slug === input.slug
+        (candidate) =>
+          candidate.id !== categoryId && candidate.slug === input.slug,
       )
     ) {
       throw new Error(`Category slug "${input.slug}" already exists.`);
@@ -74,25 +92,38 @@ export async function deleteCategory(
   options?: {
     reassignToCategoryId?: number;
     deleteItems?: boolean;
-  }
+  },
 ) {
-  return updateAppState((state) => {
+  const deletedItemIds = await updateAppState((state) => {
     if (!state.categories.some((category) => category.id === categoryId)) {
-      return;
+      return [];
     }
 
     const used = state.items.some((item) => item.categoryId === categoryId);
 
     if (used && !options?.deleteItems && !options?.reassignToCategoryId) {
-      throw new Error("Choose whether to delete or reassign this category's items.");
+      throw new Error(
+        "Choose whether to delete or reassign this category's items.",
+      );
     }
 
     if (options?.deleteItems) {
-      state.items = state.items.filter((item) => item.categoryId !== categoryId);
+      const itemIds = state.items
+        .filter((item) => item.categoryId === categoryId)
+        .map((item) => item.id);
+      state.items = state.items.filter(
+        (item) => item.categoryId !== categoryId,
+      );
+      state.categories = state.categories.filter(
+        (category) => category.id !== categoryId,
+      );
+      return itemIds;
     } else if (options?.reassignToCategoryId) {
       if (
         options.reassignToCategoryId === categoryId ||
-        !state.categories.some((category) => category.id === options.reassignToCategoryId)
+        !state.categories.some(
+          (category) => category.id === options.reassignToCategoryId,
+        )
       ) {
         throw new Error("Reassignment category does not exist.");
       }
@@ -106,13 +137,22 @@ export async function deleteCategory(
       });
     }
 
-    state.categories = state.categories.filter((category) => category.id !== categoryId);
+    state.categories = state.categories.filter(
+      (category) => category.id !== categoryId,
+    );
+    return [];
   });
+
+  if (deletedItemIds.length) {
+    await updateVocabularyProgress(deletedItemIds, () => undefined);
+  }
 }
 
 export async function getAllVocabularyItems(): Promise<VocabularyItem[]> {
   const { categories, items } = await getAppState();
-  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const categoryById = new Map(
+    categories.map((category) => [category.id, category]),
+  );
 
   return items
     .map((item) => withCategory(item, categoryById))
@@ -122,13 +162,17 @@ export async function getAllVocabularyItems(): Promise<VocabularyItem[]> {
 export async function getVocabularyItemById(itemId: number) {
   const { categories, items } = await getAppState();
   const item = items.find((candidate) => candidate.id === itemId);
-  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const categoryById = new Map(
+    categories.map((category) => [category.id, category]),
+  );
   return item ? withCategory(item, categoryById) : null;
 }
 
 export async function createVocabularyItem(input: VocabularyItemInput) {
   return updateAppState((state) => {
-    if (!state.categories.some((category) => category.id === input.categoryId)) {
+    if (
+      !state.categories.some((category) => category.id === input.categoryId)
+    ) {
       throw new Error("Category does not exist.");
     }
 
@@ -150,14 +194,19 @@ export async function createVocabularyItem(input: VocabularyItemInput) {
   });
 }
 
-export async function updateVocabularyItem(itemId: number, input: VocabularyItemInput) {
+export async function updateVocabularyItem(
+  itemId: number,
+  input: VocabularyItemInput,
+) {
   return updateAppState((state) => {
     const item = state.items.find((candidate) => candidate.id === itemId);
 
     if (!item) {
       throw new Error("Vocabulary item does not exist.");
     }
-    if (!state.categories.some((category) => category.id === input.categoryId)) {
+    if (
+      !state.categories.some((category) => category.id === input.categoryId)
+    ) {
       throw new Error("Category does not exist.");
     }
 
@@ -177,9 +226,10 @@ export async function updateVocabularyItem(itemId: number, input: VocabularyItem
 }
 
 export async function deleteVocabularyItem(itemId: number) {
-  return updateAppState((state) => {
+  await updateAppState((state) => {
     state.items = state.items.filter((item) => item.id !== itemId);
   });
+  await updateVocabularyProgress([itemId], () => undefined);
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -202,10 +252,51 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export function getLearningProgress() {
+  return getAllVocabularyProgress();
+}
+
+export async function recordVocabularyReview(
+  itemId: number,
+  result: ReviewResult,
+  now = new Date(),
+) {
+  let next: VocabularyProgress | undefined;
+  await updateVocabularyProgress([itemId], (current) => {
+    next = applyReviewResult(current, itemId, result, now);
+    return next;
+  });
+  return next!;
+}
+
+export function relearnVocabularyItems(itemIds: number[], now = new Date()) {
+  return updateVocabularyProgress(itemIds, (current) =>
+    current
+      ? {
+          ...current,
+          dueAt: now.toISOString(),
+          intervalStep: -1,
+          status: "learning",
+          successfulSessions: 0,
+        }
+      : undefined,
+  );
+}
+
+export function clearNeedsWork(itemIds: number[]) {
+  return updateVocabularyProgress(itemIds, (current) =>
+    current ? { ...current, needsWork: false } : undefined,
+  );
+}
+
+export function resetVocabularyProgress(itemIds: number[]) {
+  return updateVocabularyProgress(itemIds, () => undefined);
+}
+
 export async function importVocabularyData(payload: ImportPayload) {
   return updateAppState((state) => {
     const categoryIdBySlug = new Map(
-      state.categories.map((category) => [category.slug, category.id])
+      state.categories.map((category) => [category.slug, category.id]),
     );
     const now = isoNow();
 
@@ -215,7 +306,12 @@ export async function importVocabularyData(payload: ImportPayload) {
       }
 
       const id = state.nextCategoryId++;
-      state.categories.push({ ...category, id, createdAt: now, updatedAt: now });
+      state.categories.push({
+        ...category,
+        id,
+        createdAt: now,
+        updatedAt: now,
+      });
       categoryIdBySlug.set(category.slug, id);
     });
 

@@ -12,7 +12,10 @@ import { slugify } from "@/lib/utils/strings";
 const languageCodeSchema = z
   .string()
   .trim()
-  .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, "Use a valid BCP-47 language tag.");
+  .regex(
+    /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/,
+    "Use a valid BCP-47 language tag.",
+  );
 
 const textListSchema = z.array(z.string().trim().min(1)).default([]);
 
@@ -49,7 +52,10 @@ export const itemImageSchema = z.discriminatedUnion("kind", [
 export const vocabularyItemSchema = z.object({
   categoryId: z.number().int().positive(),
   sourceText: z.string().trim().min(1, "Source text is required."),
-  targetText: z.string().trim().min(1, "Translation or explanation is required."),
+  targetText: z
+    .string()
+    .trim()
+    .min(1, "Translation or explanation is required."),
   sourceLanguage: languageCodeSchema.default(DEFAULT_SOURCE_LANGUAGE),
   targetLanguage: languageCodeSchema.default(DEFAULT_TARGET_LANGUAGE),
   examples: textListSchema,
@@ -118,13 +124,26 @@ const storedVocabularyItemSchema = z
   })
   .superRefine((item, context) => {
     if (item.imageKind === "none" && item.imageUri !== null) {
-      context.addIssue({ code: "custom", message: "An item without an image cannot have an image URI." });
+      context.addIssue({
+        code: "custom",
+        message: "An item without an image cannot have an image URI.",
+      });
     }
     if (item.imageKind !== "none" && !item.imageUri) {
-      context.addIssue({ code: "custom", message: "An image URI is required." });
+      context.addIssue({
+        code: "custom",
+        message: "An image URI is required.",
+      });
     }
-    if (item.imageKind === "remote" && item.imageUri && !item.imageUri.startsWith("https://")) {
-      context.addIssue({ code: "custom", message: "Remote images must use HTTPS." });
+    if (
+      item.imageKind === "remote" &&
+      item.imageUri &&
+      !item.imageUri.startsWith("https://")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Remote images must use HTTPS.",
+      });
     }
   });
 
@@ -179,7 +198,9 @@ export const persistedAppStateSchema = z
       itemIds.add(item.id);
     });
 
-    if (state.categories.some((category) => category.id >= state.nextCategoryId)) {
+    if (
+      state.categories.some((category) => category.id >= state.nextCategoryId)
+    ) {
       context.addIssue({
         code: "custom",
         message: "Next category id must exceed every stored category id.",
@@ -195,11 +216,56 @@ export const persistedAppStateSchema = z
     }
   });
 
-export const appStateBackupSchema = z.object({
-  format: z.literal("vocabulary-builder-backup"),
-  exportedAt: z.string().min(1),
-  state: persistedAppStateSchema,
+export const vocabularyProgressSchema = z.object({
+  itemId: z.number().int().positive(),
+  status: z.enum(["learning", "mastered"]),
+  dueAt: z.string().min(1),
+  intervalStep: z.number().int().min(-1).max(6),
+  successfulSessions: z.number().int().nonnegative(),
+  totalAttempts: z.number().int().positive(),
+  totalMisses: z.number().int().nonnegative(),
+  needsWork: z.boolean(),
+  lastReviewedAt: z.string().min(1),
+  lastSuccessfulAt: z.string().min(1).nullable(),
+  reviewEvents: z
+    .array(
+      z.object({
+        reviewedAt: z.string().min(1),
+        result: z.enum(["remembered", "missed"]),
+      }),
+    )
+    .max(100),
 });
+
+export const appStateBackupSchema = z
+  .object({
+    format: z.literal("vocabulary-builder-backup"),
+    exportedAt: z.string().min(1),
+    progress: z.array(vocabularyProgressSchema).optional().default([]),
+    state: persistedAppStateSchema,
+  })
+  .superRefine((backup, context) => {
+    const itemIds = new Set(backup.state.items.map((item) => item.id));
+    const progressIds = new Set<number>();
+
+    backup.progress.forEach((progress, index) => {
+      if (!itemIds.has(progress.itemId)) {
+        context.addIssue({
+          code: "custom",
+          message: `Progress references unknown item ${progress.itemId}.`,
+          path: ["progress", index, "itemId"],
+        });
+      }
+      if (progressIds.has(progress.itemId)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate progress for item ${progress.itemId}.`,
+          path: ["progress", index, "itemId"],
+        });
+      }
+      progressIds.add(progress.itemId);
+    });
+  });
 
 export type CategoryInput = z.infer<typeof categoryInputSchema>;
 export type VocabularyItemInput = z.infer<typeof vocabularyItemSchema>;

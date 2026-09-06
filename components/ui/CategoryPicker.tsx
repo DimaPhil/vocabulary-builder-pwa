@@ -22,12 +22,14 @@ export function CategoryPicker({
   allowEmpty = true,
   categories,
   label = "Categories",
+  onChange,
   onToggle,
   selectedIds,
 }: {
   allowEmpty?: boolean;
   categories: Category[];
   label?: string;
+  onChange?: (categoryIds: number[]) => void;
   onToggle: (categoryId: number) => void;
   selectedIds: number[];
 }) {
@@ -52,13 +54,28 @@ export function CategoryPicker({
   return (
     <View style={{ gap: 10 }}>
       <TextField
-        label={`Search ${label.toLowerCase()}`}
+        label={`Search ${label.toLowerCase()} (multi-select)`}
         onChangeText={setQuery}
-        placeholder="Level or topic"
+        placeholder="Filter by topic or name"
         value={query}
       />
       {selectedIds.length ? (
-        <Text variant="caption">{selectedIds.length} selected</Text>
+        <View
+          style={{
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text variant="caption">{selectedIds.length} selected</Text>
+          {onChange ? (
+            <Button
+              label="Clear selection"
+              onPress={() => onChange([])}
+              variant="ghost"
+            />
+          ) : null}
+        </View>
       ) : allowEmpty ? (
         <Text variant="caption">None selected</Text>
       ) : null}
@@ -68,6 +85,8 @@ export function CategoryPicker({
         const selectedCount = group.categories.filter((category) =>
           selectedIds.includes(category.id),
         ).length;
+        const groupIds = group.categories.map((category) => category.id);
+        const allSelected = selectedCount === group.categories.length;
 
         return (
           <View key={group.level} style={{ gap: 8 }}>
@@ -76,17 +95,36 @@ export function CategoryPicker({
                 {group.level} ({selectedCount}/{group.categories.length})
               </Text>
             ) : (
-              <Button
-                label={`${isExpanded ? "Hide" : "Show"} ${group.level} (${selectedCount}/${group.categories.length})`}
-                onPress={() =>
-                  setExpanded((current) =>
-                    current.includes(group.level)
-                      ? current.filter((level) => level !== group.level)
-                      : [...current, group.level],
-                  )
-                }
-                variant="secondary"
-              />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {onChange ? (
+                  <View style={{ flexGrow: 1 }}>
+                    <Button
+                      label={`${allSelected ? "Clear" : "Select"} all ${group.level}`}
+                      onPress={() =>
+                        onChange(
+                          allSelected
+                            ? selectedIds.filter((id) => !groupIds.includes(id))
+                            : [...new Set([...selectedIds, ...groupIds])],
+                        )
+                      }
+                      variant={allSelected ? "primary" : "secondary"}
+                    />
+                  </View>
+                ) : null}
+                <View style={{ flexGrow: 1 }}>
+                  <Button
+                    label={`${isExpanded ? "Hide" : "Browse"} ${group.level} categories (${selectedCount}/${group.categories.length})`}
+                    onPress={() =>
+                      setExpanded((current) =>
+                        current.includes(group.level)
+                          ? current.filter((level) => level !== group.level)
+                          : [...current, group.level],
+                      )
+                    }
+                    variant="ghost"
+                  />
+                </View>
+              </View>
             )}
             {isExpanded ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>

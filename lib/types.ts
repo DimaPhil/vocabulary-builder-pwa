@@ -27,15 +27,40 @@ export type VocabularyItem = {
 
 export type PracticeMode = "source_to_target" | "target_to_source";
 
+export type PracticeFocus = "daily" | "new" | "needs_work" | "categories";
+
 export type PracticeSessionConfig = {
   categoryIds: number[];
+  focus: PracticeFocus;
   mode: PracticeMode;
+  sessionSize: number;
   showImageHints: boolean;
   showExamples: boolean;
 };
 
 export type PracticeCard = VocabularyItem & {
   maskedExamples: string[];
+};
+
+export type ReviewResult = "remembered" | "missed";
+
+export type ReviewEvent = {
+  reviewedAt: string;
+  result: ReviewResult;
+};
+
+export type VocabularyProgress = {
+  itemId: number;
+  status: "learning" | "mastered";
+  dueAt: string;
+  intervalStep: number;
+  successfulSessions: number;
+  totalAttempts: number;
+  totalMisses: number;
+  needsWork: boolean;
+  lastReviewedAt: string;
+  lastSuccessfulAt: string | null;
+  reviewEvents: ReviewEvent[];
 };
 
 export type RotatingWordItem = {
@@ -80,5 +105,6 @@ export type PersistedAppState = {
 export type AppStateBackup = {
   format: "vocabulary-builder-backup";
   exportedAt: string;
+  progress: VocabularyProgress[];
   state: PersistedAppState;
 };

@@ -9,6 +9,8 @@ An installable, local-first vocabulary trainer built with Expo Router and React 
 - JSON import, preview, backup, and restore
 - Library search and filters
 - Source-to-translation and translation-to-source practice
+- Daily, new-word, Needs work, and category-focused sessions
+- Self-rated spaced repetition with progress and weak-area dashboards
 - Optional examples, synonyms, and images
 - Local browser storage with no account or backend
 - Offline app shell and bundled lessons after the first successful load
@@ -47,9 +49,21 @@ Open `http://localhost:4173`. Localhost is treated as a secure context for servi
 
 Open the app online once before relying on offline mode. The app shell, built-in seed, and attribution files are cached during service-worker installation. Remote image URLs require a network connection unless the browser happens to retain them in its normal HTTP cache.
 
+## Learning model
+
+After revealing an answer, choose **Remembered** or **Missed it**. A missed word is added to **Needs work**, returns after three other cards, and is due again the next day. Remembered words use 1, 3, 7, 14, 30, 60, and 120-day intervals. Four successful due reviews on separate days mark a word as mastered; mastered words continue with maintenance reviews.
+
+Daily review prioritizes overdue Needs work, other due words, then new words. The dashboard shows due, Needs work, mastered, coverage, 7/30-day self-rated recall, and categories that need attention. **Relearn now** keeps history; **Reset progress** erases the selected categories' history and schedule.
+
+This design follows evidence for retrieval practice, spacing, and successive relearning: [Karpicke and Roediger](https://doi.org/10.1126/science.1152408), [Bahrick et al.](https://doi.org/10.1111/j.1467-9280.1993.tb00571.x), and [Rawson and Dunlosky](https://pubmed.ncbi.nlm.nih.gov/21707204/).
+
+## iPhone widget
+
+The installed PWA can show Word of the moment inside the app, but iOS does not let a web app provide a native Home Screen widget. That requires a separate native [WidgetKit extension](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension). Web push reminders are possible, but reliable scheduled daily delivery would also require a push backend.
+
 ## Data and updates
 
-Vocabulary and settings stay in IndexedDB on the current browser profile. Browser storage is not a backup: export JSON periodically, especially before clearing Safari website data or moving to another phone.
+Vocabulary, settings, and learning progress stay in IndexedDB on the current browser profile. Browser storage is not a backup: export JSON periodically, especially before clearing Safari website data or moving to another phone.
 
 When a deployment installs in the background, the current app keeps running and asks before reloading into the new version. Updating the app does not clear IndexedDB.
 

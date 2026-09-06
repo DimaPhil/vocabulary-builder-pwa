@@ -3,6 +3,7 @@ module.exports = {
   preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/ios/", "/android/"],
+  modulePathIgnorePatterns: ["<rootDir>/.vercel/"],
   collectCoverageFrom: [
     "features/admin/schemas/import.ts",
     "features/practice/schemas/session.ts",

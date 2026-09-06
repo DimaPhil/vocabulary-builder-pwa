@@ -6,6 +6,6 @@ module.exports = defineConfig([
   ...expoConfig,
   prettierConfig,
   {
-    ignores: ["coverage/*", "dist/*", "ios/*", "android/*"],
+    ignores: ["coverage/*", "dist/*", ".vercel/*", "ios/*", "android/*"],
   },
 ]);

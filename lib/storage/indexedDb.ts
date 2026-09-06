@@ -16,8 +16,8 @@ import {
   DEFAULT_TARGET_LANGUAGE,
   DEFAULT_ROTATION_HOURS,
 } from "@/lib/constants/app";
+import { databaseName } from "@/lib/storage/userScope";
 
-const DATABASE_NAME = "vocabulary-builder";
 const DATABASE_VERSION = 2;
 const STORE_NAME = "app";
 const PROGRESS_STORE_NAME = "progress";
@@ -47,7 +47,7 @@ function openDatabase() {
   }
 
   databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    const request = indexedDB.open(databaseName(), DATABASE_VERSION);
 
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE_NAME)) {
